@@ -3,6 +3,8 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import numpy as np
 import math
+from PIL import Image
+from PIL import ImageOps
 PI = np.pi
 
 IS_PERSPECTIVE = True                               # 透视投影
@@ -11,12 +13,11 @@ SCALE_K = np.array([1.0, 1.0, 1.0])                 # 模型缩放比例
 EYE = np.array([0.0, 0.0, 0.3])                     # 眼睛的位置（默认z轴的正方向）
 LOOK_AT = np.array([0.0, 1.0, 0.0])                 # 瞄准方向的参考点（默认在坐标原点）
 EYE_UP = np.array([0.0, 0.5, 0.0])                  # 定义对观察者而言的上方（默认y轴的正方向）
-WIN_W, WIN_H = 1080, 720                             # 保存窗口宽度和高度的变量
+WIN_W, WIN_H = 720, 480                             # 保存窗口宽度和高度的变量
 LEFT_IS_DOWNED = False                              # 鼠标左键被按下
 MOUSE_X, MOUSE_Y = 0, 0                             # 考察鼠标位移量时保存的起始位置
 
 MAX_THETA = PI / 5
-
 RVC_THETA = PI /6
 
 # ------------------------------------------------------------------
@@ -229,6 +230,7 @@ def keydown(key, x, y):
                     RVC_THETA = -MAX_THETA
                 else:
                     RVC_THETA = RVC_THETA - theta_step
+            save_image()
             print(RVC_THETA)
 
 
@@ -324,7 +326,7 @@ def draw():
     glutSwapBuffers()                    # 切换缓冲区，以显示绘制内容
     
 # 摄像头视角
-EYE = np.array([0.0, -0.5, 0.7])                     # 眼睛的位置（默认z轴的正方向）
+EYE = np.array([0.0, -0.5, 1.0])                     # 眼睛的位置（默认z轴的正方向）
 LOOK_AT = np.array([0.0, 1.0, 0.0])                 # 瞄准方向的参考点（默认在坐标原点）
 EYE_UP = np.array([0.0, 0.5, 0.0])                  # 定义对观察者而言的上方（默认y轴的正方向）
 '''
@@ -333,6 +335,14 @@ EYE = np.array([0.0, 0.0, 2.0])                     # 眼睛的位置（默认z�
 LOOK_AT = np.array([0.0, 0.0, 0.0])                 # 瞄准方向的参考点（默认在坐标原点）
 EYE_UP = np.array([0.0, 0.5, 0.0])                  # 定义对观察者而言的上方（默认y轴的正方向）
 '''
+def save_image():
+    glPixelStorei(GL_PACK_ALIGNMENT,4)
+    glReadBuffer(GL_FRONT)
+    data = glReadPixels(0,0,WIN_W,WIN_H, GL_RGBA, GL_UNSIGNED_BYTE)
+    image = Image.frombytes('RGBA', (WIN_W,WIN_H), data)
+    image = ImageOps.flip(image)
+    image.save('rvc%.2f.png'%RVC_THETA,'png')
+
 
 if __name__ == "__main__":
     glutInit()
@@ -344,10 +354,15 @@ if __name__ == "__main__":
     glutCreateWindow('Quidam Of OpenGL')
     
     init()                              # 初始化画布
+
+
+
     glutDisplayFunc(draw)               # 注册回调函数draw()
     glutReshapeFunc(reshape)            # 注册响应窗口改变的函数reshape()
     glutMouseFunc(mouseclick)           # 注册响应鼠标点击的函数mouseclick()
     glutMotionFunc(mousemotion)         # 注册响应鼠标拖拽的函数mousemotion()
     glutKeyboardFunc(keydown)           # 注册键盘输入的函数keydown()
-    
+
+    save_image()
+
     glutMainLoop()                      # 进入glut主循环

@@ -3,6 +3,8 @@ from OpenGL.GLU import *
 from OpenGL.GLUT import *
 import numpy as np
 import math
+from PIL import Image
+from PIL import ImageOps
 PI = np.pi
 
 IS_PERSPECTIVE = True                               # 透视投影
@@ -11,11 +13,11 @@ SCALE_K = np.array([1.0, 1.0, 1.0])                 # 模型缩放比例
 EYE = np.array([0.0, 0.0, 0.3])                     # 眼睛的位置（默认z轴的正方向）
 LOOK_AT = np.array([0.0, 1.0, 0.0])                 # 瞄准方向的参考点（默认在坐标原点）
 EYE_UP = np.array([0.0, 0.5, 0.0])                  # 定义对观察者而言的上方（默认y轴的正方向）
-WIN_W, WIN_H = 1080, 720                             # 保存窗口宽度和高度的变量
+WIN_W, WIN_H = 720, 480                             # 保存窗口宽度和高度的变量
 LEFT_IS_DOWNED = False                              # 鼠标左键被按下
 MOUSE_X, MOUSE_Y = 0, 0                             # 考察鼠标位移量时保存的起始位置
 
-MAX_THETA = PI / 5
+MAX_THETA = PI / 3
 
 RVC_THETA = PI /6
 
@@ -26,9 +28,9 @@ def get_lc():
     if abs(RVC_THETA) < PI / 200:
         return 1000
     elif RVC_THETA < 0:
-        return 2 * (1. / math.tan(-RVC_THETA)) / 3.
+        return 4 * (1. / math.tan(-RVC_THETA)) / 2.
     else:
-        return 2 * (1. / math.tan(RVC_THETA)) / 3.
+        return 4 * (1. / math.tan(RVC_THETA)) / 2.
 
 def get_r():
     global RVC_THETA
@@ -39,6 +41,72 @@ def get_r():
 
 def get_d():
     return 0.5 / 3.
+
+def save_image():
+    glPixelStorei(GL_PACK_ALIGNMENT,4)
+    glReadBuffer(GL_FRONT)
+    data = glReadPixels(0,0,WIN_W,WIN_H, GL_RGBA, GL_UNSIGNED_BYTE)
+    image = Image.frombytes('RGBA', (WIN_W,WIN_H), data)
+    image = ImageOps.flip(image)
+    image.save('rvc%.2f.png'%RVC_THETA,'png')
+# --------------------------------------------------------------
+
+def get_inside_r():
+    global RVC_THETA
+    if RVC_THETA != 0:
+        return (get_lc() - 1/3) ** 2
+    else:
+        return 1000
+
+def get_outside_r():
+    global RVC_THETA
+    if RVC_THETA != 0:
+        return (get_lc() + 1/3) ** 2
+    else:
+        return 1000
+
+def get_line_dist():
+    return 3
+
+def get_x_offset():
+    return 0.7
+
+def drawTorus3(radius, line_width, sides, rings):
+    print("%.3f,%.3f"%(get_inside_r(),get_outside_r()))
+    width_range = [ i * line_width / sides for i in range(sides) ]
+    inside_dest_range = [ get_inside_r() - line_width / 2 + w for w in width_range ]
+    outside_dest_range = [ get_outside_r() - line_width / 2 + w for w in width_range ]
+
+    view_theta = get_line_dist() / get_outside_r()
+    view_theta_range = [ i * view_theta / rings for i in range(rings) ]
+    if RVC_THETA > 0:
+        left_xy = [[(math.cos(t) * dist - get_inside_r() - get_x_offset(), math.sin(t) * dist) for dist in inside_dest_range ] for t in view_theta_range ]
+        right_xy = [[(math.cos(t) * dist - get_outside_r() + get_x_offset(), math.sin(t) * dist) for dist in outside_dest_range ] for t in view_theta_range ]
+    else:
+        left_xy = [[(math.cos(PI-t) * dist + get_outside_r() - get_x_offset(), math.sin(PI-t) * dist) for dist in outside_dest_range] for t in view_theta_range ] 
+        right_xy = [[(math.cos(PI-t) * dist + get_inside_r() + get_x_offset(), math.sin(PI-t) * dist) for dist in inside_dest_range] for t in view_theta_range ]
+
+    glColor4f(1.0, 1.0, 1.0, 1.0)
+    points_1 = left_xy[0]
+    for points in left_xy:
+        glBegin(GL_QUAD_STRIP) 
+        for i, (x,y) in enumerate(points):
+            x1, y1 = points_1[i]
+            glVertex3f(x1, y1, 0)
+            glVertex3f(x, y, 0)
+        glEnd()
+        points_1 = points
+
+    points_2 = right_xy[0]
+    for points in right_xy:
+        glBegin(GL_QUAD_STRIP) 
+        for i, (x,y) in enumerate(points):
+            x1, y1 = points_2[i]
+            glVertex3f(x1, y1, 0)
+            glVertex3f(x, y, 0)
+        glEnd()
+        points_2 = points
+    
 # --------------------------------------------------------------
 def drawTorus2(radius, tube_radius, sides, rings):
     phi = [ i  * 2 * tube_radius / sides for i in range(sides * 2) ]
@@ -64,16 +132,17 @@ def drawTorus2(radius, tube_radius, sides, rings):
 # -------绘制圆环
 def drawTorus(radius, tube_radius, sides, rings):
     side_delta = tube_radius / sides
-    ring_delta = (1.3 / get_r()) / rings #以3m标么化, 1.3 约等于4m左右
+    ring_delta_small = (2.6 / get_r()) / rings #以3m标么化, 1.3 约等于4m左右
+    ring_delta_big = (2.6 / get_r()) / rings #以3m标么化, 1.3 约等于4m左右
     theta = 0.0 if RVC_THETA >= 0 else PI
     cosTheta = math.cos(theta)
     sinTheta = math.sin(theta)
 
     glColor4f(1.0, 1.0, 1.0, 1.0)
     for i in range(rings):
-        theta1 = (theta + ring_delta) if RVC_THETA >= 0 else (theta - ring_delta)
-        cosTheta1 = math.cos(theta1)
-        sinTheta1 = math.sin(theta1)
+        theta1_big = (theta + ring_delta_big) if RVC_THETA >= 0 else (theta - ring_delta_big)
+        cosTheta1_big = math.cos(theta1_big)
+        sinTheta1_big = math.sin(theta1_big)
         
         glBegin(GL_QUAD_STRIP) #左边线
         phi = 0.0
@@ -86,10 +155,10 @@ def drawTorus(radius, tube_radius, sides, rings):
                 glVertex3f(dist - radius - 0.3, (i+1) * 0.013 , 0)
             elif RVC_THETA > 0: # 左边圆
                 glVertex3f(cosTheta * dist - get_r() - 0.3, sinTheta * dist , 0)
-                glVertex3f(cosTheta1 * dist - get_r() - 0.3, sinTheta1 * dist, 0)
+                glVertex3f(cosTheta1_big * dist - get_r() - 0.3, sinTheta1_big * dist, 0)
             else: #右边圆
                 glVertex3f(cosTheta * dist + get_r() - 0.3 + 0.025, sinTheta * dist , 0)
-                glVertex3f(cosTheta1 * dist + get_r() - 0.3 + 0.025, sinTheta1 * dist, 0)
+                glVertex3f(cosTheta1_big * dist + get_r() - 0.3 + 0.025, sinTheta1_big * dist, 0)
 
         glEnd()
 
@@ -104,15 +173,15 @@ def drawTorus(radius, tube_radius, sides, rings):
                 glVertex3f(dist - radius + 0.3, (i+1) * 0.013 , 0)
             elif RVC_THETA > 0:
                 glVertex3f(cosTheta * dist - get_r() + 0.3, sinTheta * dist , 0)
-                glVertex3f(cosTheta1 * dist - get_r() + 0.3, sinTheta1 * dist, 0)
+                glVertex3f(cosTheta1_big * dist - get_r() + 0.3, sinTheta1_big * dist, 0)
             else:
                 glVertex3f(cosTheta * dist + get_r() + 0.30 + 0.025, sinTheta * dist , 0)
-                glVertex3f(cosTheta1 * dist + get_r() + 0.30 + 0.025, sinTheta1 * dist, 0)
+                glVertex3f(cosTheta1_big * dist + get_r() + 0.30 + 0.025, sinTheta1_big * dist, 0)
 
         glEnd()
-        theta = theta1
-        cosTheta = cosTheta1
-        sinTheta = sinTheta1
+        theta = theta1_big
+        cosTheta = cosTheta1_big
+        sinTheta = sinTheta1_big
 
 def getposture():
     global EYE, LOOK_AT
@@ -230,6 +299,7 @@ def keydown(key, x, y):
                 else:
                     RVC_THETA = RVC_THETA - theta_step
             print(RVC_THETA)
+            save_image()
 
 
         
@@ -317,14 +387,14 @@ def draw():
     glEnd()                              # 结束绘制线段
     '''
     
-    #drawTorus(get_r(), 0.02, 5, 100)
-    drawTorus2(get_r(), 0.02, 5, 100)
+    drawTorus3(get_r(), 0.05, 5, 100)
+    #drawTorus2(get_r(), 0.02, 5, 100)
 
     # ---------------------------------------------------------------
     glutSwapBuffers()                    # 切换缓冲区，以显示绘制内容
-    
+
 # 摄像头视角
-EYE = np.array([0.0, -0.5, 0.7])                     # 眼睛的位置（默认z轴的正方向）
+EYE = np.array([0.0, -0.5, 1.0])                     # 眼睛的位置（默认z轴的正方向）
 LOOK_AT = np.array([0.0, 1.0, 0.0])                 # 瞄准方向的参考点（默认在坐标原点）
 EYE_UP = np.array([0.0, 0.5, 0.0])                  # 定义对观察者而言的上方（默认y轴的正方向）
 '''
