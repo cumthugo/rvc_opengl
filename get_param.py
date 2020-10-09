@@ -5,6 +5,7 @@ import numpy as np
 import math
 from PIL import Image
 from PIL import ImageOps
+import cv2
 PI = np.pi
 
 IS_PERSPECTIVE = True                               # 透视投影
@@ -18,9 +19,13 @@ LEFT_IS_DOWNED = False                              # 鼠标左键被按下
 MOUSE_X, MOUSE_Y = 0, 0                             # 考察鼠标位移量时保存的起始位置
 
 MAX_THETA = PI / 3
-
 RVC_THETA = PI /6
 
+Ref_image = cv2.imread('refImage/resize-266.png')
+
+LINE_DIST = 3
+X_WIDTH = 0.7
+X_OFFSET = 0
 # ------------------------------------------------------------------
 # ref: https://blog.csdn.net/weixin_38140931/article/details/89214903
 def get_lc():
@@ -42,13 +47,6 @@ def get_r():
 def get_d():
     return 0.5 / 3.
 
-def save_image():
-    glPixelStorei(GL_PACK_ALIGNMENT,4)
-    glReadBuffer(GL_FRONT)
-    data = glReadPixels(0,0,WIN_W,WIN_H, GL_RGBA, GL_UNSIGNED_BYTE)
-    image = Image.frombytes('RGBA', (WIN_W,WIN_H), data)
-    image = ImageOps.flip(image)
-    image.save('rvc%.2f.png'%RVC_THETA,'png')
 # --------------------------------------------------------------
 
 def get_inside_r():
@@ -66,10 +64,18 @@ def get_outside_r():
         return 1000
 
 def get_line_dist():
-    return 3
+    global LINE_DIST
+    return LINE_DIST
+
+def get_x_width():
+    global X_WIDTH
+    return X_WIDTH
 
 def get_x_offset():
-    return 0.7
+    global X_OFFSET
+    return X_OFFSET
+
+
 
 def drawTorus3(radius, line_width, sides, rings):
     print("%.3f,%.3f"%(get_inside_r(),get_outside_r()))
@@ -80,11 +86,11 @@ def drawTorus3(radius, line_width, sides, rings):
     view_theta = get_line_dist() / get_outside_r()
     view_theta_range = [ i * view_theta / rings for i in range(rings) ]
     if RVC_THETA > 0:
-        left_xy = [[(math.cos(t) * dist - get_inside_r() - get_x_offset(), math.sin(t) * dist) for dist in inside_dest_range ] for t in view_theta_range ]
-        right_xy = [[(math.cos(t) * dist - get_outside_r() + get_x_offset(), math.sin(t) * dist) for dist in outside_dest_range ] for t in view_theta_range ]
+        left_xy = [[(math.cos(t) * dist - get_inside_r() - get_x_width() + get_x_offset(), math.sin(t) * dist) for dist in inside_dest_range ] for t in view_theta_range ]
+        right_xy = [[(math.cos(t) * dist - get_outside_r() + get_x_width() + get_x_offset(), math.sin(t) * dist) for dist in outside_dest_range ] for t in view_theta_range ]
     else:
-        left_xy = [[(math.cos(PI-t) * dist + get_outside_r() - get_x_offset(), math.sin(PI-t) * dist) for dist in outside_dest_range] for t in view_theta_range ] 
-        right_xy = [[(math.cos(PI-t) * dist + get_inside_r() + get_x_offset(), math.sin(PI-t) * dist) for dist in inside_dest_range] for t in view_theta_range ]
+        left_xy = [[(math.cos(PI-t) * dist + get_outside_r() - get_x_width() + get_x_offset(), math.sin(PI-t) * dist) for dist in outside_dest_range] for t in view_theta_range ] 
+        right_xy = [[(math.cos(PI-t) * dist + get_inside_r() + get_x_width() + get_x_offset(), math.sin(PI-t) * dist) for dist in inside_dest_range] for t in view_theta_range ]
 
     glColor4f(1.0, 1.0, 1.0, 1.0)
     points_1 = left_xy[0]
@@ -107,81 +113,18 @@ def drawTorus3(radius, line_width, sides, rings):
         glEnd()
         points_2 = points
     
-# --------------------------------------------------------------
-def drawTorus2(radius, tube_radius, sides, rings):
-    phi = [ i  * 2 * tube_radius / sides for i in range(sides * 2) ]
-    theta = [ i * ((1.3 / get_r()) / rings) for i in range(rings) ]
-    left_dist = [ get_r() - tube_radius/2 + p for p in phi ]
-    if RVC_THETA > 0:
-        left_xy = [[(math.cos(t) * dist - get_r() - 0.3, math.sin(t) * dist) for dist in left_dist ] for t in theta ] 
-    else:
-        left_xy = [[(math.cos(PI-t) * dist + get_r() - 0.3 + 0.05, math.sin(PI-t) * dist) for dist in left_dist ] for t in theta ] 
-
-    glColor4f(1.0, 1.0, 1.0, 1.0)
-    points_1 = left_xy[0]
-    for points in left_xy:
-        glBegin(GL_QUAD_STRIP) 
-        for i, (x,y) in enumerate(points):
-            x1, y1 = points_1[i]
-            glVertex3f(x1, y1, 0)
-            glVertex3f(x, y, 0)
-        glEnd()
-        points_1 = points
-
-
-# -------绘制圆环
-def drawTorus(radius, tube_radius, sides, rings):
-    side_delta = tube_radius / sides
-    ring_delta_small = (2.6 / get_r()) / rings #以3m标么化, 1.3 约等于4m左右
-    ring_delta_big = (2.6 / get_r()) / rings #以3m标么化, 1.3 约等于4m左右
-    theta = 0.0 if RVC_THETA >= 0 else PI
-    cosTheta = math.cos(theta)
-    sinTheta = math.sin(theta)
-
-    glColor4f(1.0, 1.0, 1.0, 1.0)
-    for i in range(rings):
-        theta1_big = (theta + ring_delta_big) if RVC_THETA >= 0 else (theta - ring_delta_big)
-        cosTheta1_big = math.cos(theta1_big)
-        sinTheta1_big = math.sin(theta1_big)
-        
-        glBegin(GL_QUAD_STRIP) #左边线
-        phi = 0.0
-        for j in range(sides * 2):
-            phi = phi + side_delta
-            dist = get_r() - tube_radius/2 + phi
-
-            if abs(RVC_THETA) < PI / 200:    # 接近 0 度，特殊处理
-                glVertex3f(dist - radius - 0.3, i * 0.013 , 0)
-                glVertex3f(dist - radius - 0.3, (i+1) * 0.013 , 0)
-            elif RVC_THETA > 0: # 左边圆
-                glVertex3f(cosTheta * dist - get_r() - 0.3, sinTheta * dist , 0)
-                glVertex3f(cosTheta1_big * dist - get_r() - 0.3, sinTheta1_big * dist, 0)
-            else: #右边圆
-                glVertex3f(cosTheta * dist + get_r() - 0.3 + 0.025, sinTheta * dist , 0)
-                glVertex3f(cosTheta1_big * dist + get_r() - 0.3 + 0.025, sinTheta1_big * dist, 0)
-
-        glEnd()
-
-        glBegin(GL_QUAD_STRIP) #右边线
-        phi = 0.0
-        for j in range(sides * 2):
-            phi = phi + side_delta
-            dist = radius - tube_radius/2 + phi
-            
-            if abs(RVC_THETA) < PI / 200:
-                glVertex3f(dist - radius + 0.3, i * 0.013 , 0)
-                glVertex3f(dist - radius + 0.3, (i+1) * 0.013 , 0)
-            elif RVC_THETA > 0:
-                glVertex3f(cosTheta * dist - get_r() + 0.3, sinTheta * dist , 0)
-                glVertex3f(cosTheta1_big * dist - get_r() + 0.3, sinTheta1_big * dist, 0)
-            else:
-                glVertex3f(cosTheta * dist + get_r() + 0.30 + 0.025, sinTheta * dist , 0)
-                glVertex3f(cosTheta1_big * dist + get_r() + 0.30 + 0.025, sinTheta1_big * dist, 0)
-
-        glEnd()
-        theta = theta1_big
-        cosTheta = cosTheta1_big
-        sinTheta = sinTheta1_big
+def save_image():
+    glPixelStorei(GL_PACK_ALIGNMENT,4)
+    glReadBuffer(GL_FRONT)
+    data = glReadPixels(0,0,WIN_W,WIN_H, GL_RGBA, GL_UNSIGNED_BYTE)
+    image = Image.frombytes('RGBA', (WIN_W,WIN_H), data)
+    image = ImageOps.flip(image)
+    #image.save('rvc%.2f.png'%RVC_THETA,'png')
+    cvImage = cv2.cvtColor(np.asarray(image),cv2.COLOR_RGBA2BGR)
+    print(cvImage.shape)
+    mixImage = cv2.add(Ref_image, cvImage)
+    cv2.imshow('compare',mixImage)
+    cv2.waitKey(1)
 
 def getposture():
     global EYE, LOOK_AT
@@ -215,6 +158,7 @@ def mouseclick(button, state, x, y):
     global LEFT_IS_DOWNED
     global MOUSE_X, MOUSE_Y
     
+    '''
     MOUSE_X, MOUSE_Y = x, y
     if button == GLUT_LEFT_BUTTON:
         LEFT_IS_DOWNED = state==GLUT_DOWN
@@ -224,6 +168,7 @@ def mouseclick(button, state, x, y):
     elif button == 4:
         SCALE_K *= 0.95
         glutPostRedisplay()
+    '''
     
 def mousemotion(x, y):
     global LEFT_IS_DOWNED
@@ -232,6 +177,7 @@ def mousemotion(x, y):
     global DIST, PHI, THETA
     global WIN_W, WIN_H
     
+    '''
     if LEFT_IS_DOWNED:
         dx = MOUSE_X - x
         dy = y - MOUSE_Y
@@ -253,6 +199,7 @@ def mousemotion(x, y):
             EYE_UP[1] = 1.0
         
         glutPostRedisplay()
+    '''
     
 DIRECT_LEFT = True
 def keydown(key, x, y):
@@ -261,50 +208,62 @@ def keydown(key, x, y):
     global IS_PERSPECTIVE, VIEW
     global RVC_THETA, MAX_THETA
     global DIRECT_LEFT
+    global LINE_DIST 
+    global X_WIDTH 
+    global X_OFFSET
 
     theta_step = MAX_THETA / 50
     
-    if key in [b'x', b'X', b'y', b'Y', b'z', b'Z', b'r', b'l',b'a']:
-        if key == b'x': # 瞄准参考点 x 减小
-            LOOK_AT[0] -= 0.01
-        elif key == b'X': # 瞄准参考 x 增大
-            LOOK_AT[0] += 0.01
-        elif key == b'y': # 瞄准参考点 y 减小
-            LOOK_AT[1] -= 0.01
-        elif key == b'Y': # 瞄准参考点 y 增大
-            LOOK_AT[1] += 0.01
-        elif key == b'z': # 瞄准参考点 z 减小
-            LOOK_AT[2] -= 0.01
-            print(LOOK_AT)
-        elif key == b'Z': # 瞄准参考点 z 增大
-            LOOK_AT[2] += 0.01
-            print(LOOK_AT)
-        elif key == b'r':
-            RVC_THETA = RVC_THETA - theta_step if RVC_THETA > -MAX_THETA else -MAX_THETA
-            print(RVC_THETA)
-        elif key == b'l':
-            RVC_THETA = RVC_THETA + theta_step if RVC_THETA < MAX_THETA else MAX_THETA
-            print(RVC_THETA)
-        elif key == b'a':
-            if DIRECT_LEFT:
-                if RVC_THETA >= MAX_THETA:
-                    DIRECT_LEFT = False
-                    RVC_THETA = MAX_THETA
-                else:
-                    RVC_THETA = RVC_THETA + theta_step 
+    '''
+    if key == b'x': # 瞄准参考点 x 减小
+        LOOK_AT[0] -= 0.01
+    elif key == b'X': # 瞄准参考 x 增大
+        LOOK_AT[0] += 0.01
+    elif key == b'y': # 瞄准参考点 y 减小
+        LOOK_AT[1] -= 0.01
+    elif key == b'Y': # 瞄准参考点 y 增大
+        LOOK_AT[1] += 0.01
+    elif key == b'z': # 瞄准参考点 z 减小
+        LOOK_AT[2] -= 0.01
+        print(LOOK_AT)
+    elif key == b'Z': # 瞄准参考点 z 增大
+        LOOK_AT[2] += 0.01
+        print(LOOK_AT)
+    '''
+
+    if key == b'y': # 瞄准参考点 y 减小
+        LOOK_AT[1] -= 0.01
+    elif key == b'Y': # 瞄准参考点 y 增大
+        LOOK_AT[1] += 0.01
+    elif key == b'a':
+        if DIRECT_LEFT:
+            if RVC_THETA >= MAX_THETA:
+                DIRECT_LEFT = False
+                RVC_THETA = MAX_THETA
             else:
-                if RVC_THETA <= -MAX_THETA:
-                    DIRECT_LEFT = True
-                    RVC_THETA = -MAX_THETA
-                else:
-                    RVC_THETA = RVC_THETA - theta_step
-            print(RVC_THETA)
-            save_image()
-
-
-        
-        DIST, PHI, THETA = getposture()
-        glutPostRedisplay()
+                RVC_THETA = RVC_THETA + theta_step 
+        else:
+            if RVC_THETA <= -MAX_THETA:
+                DIRECT_LEFT = True
+                RVC_THETA = -MAX_THETA
+            else:
+                RVC_THETA = RVC_THETA - theta_step
+        print(RVC_THETA)
+    elif key == b'x':
+        X_OFFSET += 0.01
+    elif key == b'X':
+        X_OFFSET -= 0.01
+    elif key == b'w':
+        X_WIDTH += 0.01
+    elif key == b'W':
+        X_WIDTH -= 0.01
+    elif key == b'd':
+        LINE_DIST += 0.01
+    elif key == b'D':
+        LINE_DIST -= 0.01
+    elif key == b'q': 
+        cv2.destroyAllWindows()
+    '''
     elif key == b'\r': # 回车键，视点前进
         EYE = LOOK_AT + (EYE - LOOK_AT) * 0.9
         DIST, PHI, THETA = getposture()
@@ -316,6 +275,10 @@ def keydown(key, x, y):
     elif key == b' ': # 空格键，切换投影模式
         IS_PERSPECTIVE = not IS_PERSPECTIVE 
         glutPostRedisplay()
+    '''
+    DIST, PHI, THETA = getposture()
+    glutPostRedisplay()
+    save_image()
 
 
 
@@ -365,28 +328,6 @@ def draw():
     glEnable(GL_BLEND)
     glBlendFunc(GL_ONE, GL_ONE)
     
-    '''
-    # ---------------------------------------------------------------
-    glBegin(GL_LINES)                    # 开始绘制线段（世界坐标系）
-    
-    # 以红色绘制x轴
-    glColor4f(1.0, 0.0, 0.0, 1.0)        # 设置当前颜色为红色不透明
-    glVertex3f(-0.8, 0.0, 0.0)           # 设置x轴顶点（x轴负方向）
-    glVertex3f(0.8, 0.0, 0.0)            # 设置x轴顶点（x轴正方向）
-    
-    # 以绿色绘制y轴
-    glColor4f(0.0, 1.0, 0.0, 1.0)        # 设置当前颜色为绿色不透明
-    glVertex3f(0.0, -0.8, 0.0)           # 设置y轴顶点（y轴负方向）
-    glVertex3f(0.0, 0.8, 0.0)            # 设置y轴顶点（y轴正方向）
-    
-    # 以蓝色绘制z轴
-    glColor4f(0.0, 0.0, 1.0, 1.0)        # 设置当前颜色为蓝色不透明
-    glVertex3f(0.0, 0.0, -0.8)           # 设置z轴顶点（z轴负方向）
-    glVertex3f(0.0, 0.0, 0.8)            # 设置z轴顶点（z轴正方向）
-    
-    glEnd()                              # 结束绘制线段
-    '''
-    
     drawTorus3(get_r(), 0.05, 5, 100)
     #drawTorus2(get_r(), 0.02, 5, 100)
 
@@ -419,5 +360,6 @@ if __name__ == "__main__":
     glutMouseFunc(mouseclick)           # 注册响应鼠标点击的函数mouseclick()
     glutMotionFunc(mousemotion)         # 注册响应鼠标拖拽的函数mousemotion()
     glutKeyboardFunc(keydown)           # 注册键盘输入的函数keydown()
+    cv2.namedWindow('compare')
     
     glutMainLoop()                      # 进入glut主循环
