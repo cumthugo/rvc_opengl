@@ -19,28 +19,32 @@ LEFT_IS_DOWNED = False                              # 鼠标左键被按下
 MOUSE_X, MOUSE_Y = 0, 0                             # 考察鼠标位移量时保存的起始位置
 
 MAX_THETA = PI / 3
-RVC_THETA = PI /6
+RVC_THETA = PI / 6
 
 Ref_image = cv2.imread('refImage/resize-266.png')
 
 LINE_DIST = 3
 X_WIDTH = 0.7
 X_OFFSET = 0
+L = 4
+W_2 = 1/3
 # ------------------------------------------------------------------
 # ref: https://blog.csdn.net/weixin_38140931/article/details/89214903
 def get_lc():
     global RVC_THETA
+    global L
     if abs(RVC_THETA) < PI / 200:
         return 1000
     elif RVC_THETA < 0:
-        return 4 * (1. / math.tan(-RVC_THETA)) / 2.
+        return L * (1. / math.tan(-RVC_THETA)) / 2.
     else:
-        return 4 * (1. / math.tan(RVC_THETA)) / 2.
+        return L * (1. / math.tan(RVC_THETA)) / 2.
 
 def get_r():
     global RVC_THETA
+    global W_2
     if RVC_THETA != 0:
-        return (get_lc() + 1/3) ** 2
+        return (get_lc() + W_2) ** 2
     else:
         return 1000
 
@@ -51,8 +55,9 @@ def get_d():
 
 def get_inside_r():
     global RVC_THETA
+    global W_2
     if RVC_THETA != 0:
-        return (get_lc() - 1/3) ** 2
+        return (get_lc() - W_2) ** 2
     else:
         return 1000
 
@@ -78,7 +83,7 @@ def get_x_offset():
 
 
 def drawTorus3(radius, line_width, sides, rings):
-    print("%.3f,%.3f"%(get_inside_r(),get_outside_r()))
+    #print("%.3f,%.3f"%(get_inside_r(),get_outside_r()))
     width_range = [ i * line_width / sides for i in range(sides) ]
     inside_dest_range = [ get_inside_r() - line_width / 2 + w for w in width_range ]
     outside_dest_range = [ get_outside_r() - line_width / 2 + w for w in width_range ]
@@ -121,7 +126,7 @@ def save_image():
     image = ImageOps.flip(image)
     #image.save('rvc%.2f.png'%RVC_THETA,'png')
     cvImage = cv2.cvtColor(np.asarray(image),cv2.COLOR_RGBA2BGR)
-    print(cvImage.shape)
+    #print(cvImage.shape)
     mixImage = cv2.add(Ref_image, cvImage)
     cv2.imshow('compare',mixImage)
     cv2.waitKey(1)
@@ -261,6 +266,45 @@ def keydown(key, x, y):
         LINE_DIST += 0.01
     elif key == b'D':
         LINE_DIST -= 0.01
+    elif key == b'o':
+        W_2 += 0.01
+    elif key == b'O':
+        W_2 -= 0.01
+    elif key == b'l':
+        L += 0.01
+    elif key == b'L':
+        L -= 0.01
+    elif key == b'u':
+        EYE[0] += 0.01
+    elif key == b'U':
+        EYE[0] -= 0.01
+    elif key == b'j':
+        EYE[1] += 0.01
+    elif key == b'J':
+        EYE[1] -= 0.01
+    elif key == b'n':
+        EYE[2] += 0.01
+    elif key == b'N':
+        EYE[2] -= 0.01
+    elif key == b'i':
+        LOOK_AT[0] += 0.01
+    elif key == b'I':
+        LOOK_AT[0] -= 0.01
+    elif key == b'k':
+        LOOK_AT[1] += 0.01
+    elif key == b'K':
+        LOOK_AT[1] -= 0.01
+    elif key == b'm':
+        LOOK_AT[2] += 0.01
+    elif key == b'M':
+        LOOK_AT[2] -= 0.01
+    elif key == b'p':
+        print(f'L:{L}')
+        print(f'W_2: {W_2}')
+        print(f'x_offset: {X_OFFSET}')
+        print(f'x_width: {X_WIDTH}')
+        print(f'line_dist: {LINE_DIST}')
+        print(f'THETA: {RVC_THETA}')
     elif key == b'q': 
         cv2.destroyAllWindows()
     '''
